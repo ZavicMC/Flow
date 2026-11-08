@@ -1,5 +1,5 @@
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
-index e948dad..427b4f0 100644
+index e948dad..a6a20b2 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
 @@ -16,7 +16,8 @@ import coil3.compose.AsyncImage
@@ -12,6 +12,15 @@ index e948dad..427b4f0 100644
  
  @Composable
  internal fun ChannelBanner(
+@@ -25,7 +26,7 @@ internal fun ChannelBanner(
+ ) {
+     val bannerModifier =
+         modifier
+-            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
++            .padding(start = 16.dp, end = 16.dp, top = 0.dp)
+             .fillMaxWidth()
+             .aspectRatio(CHANNEL_BANNER_ASPECT_RATIO)
+             .clip(MaterialTheme.shapes.medium)
 @@ -42,7 +43,7 @@ internal fun ChannelBanner(
          model = bannerUrl,
          contentDescription = stringResource(R.string.channel_banner),
@@ -22,7 +31,7 @@ index e948dad..427b4f0 100644
              Log.e(
                  "ChannelBanner",
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
-index 2afbab7..a0dea12 100644
+index 2afbab7..dd4ab84 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
 @@ -5,6 +5,8 @@ import androidx.compose.foundation.background
@@ -57,7 +66,7 @@ index 2afbab7..a0dea12 100644
 -                    .padding(top = 14.dp, bottom = 4.dp),
 -            verticalAlignment = Alignment.CenterVertically,
 -            horizontalArrangement = Arrangement.spacedBy(12.dp),
-+                    .padding(top = 12.dp, bottom = 12.dp),
++                    .padding(top = 12.dp, bottom = 6.dp),
          ) {
 -            ChannelAvatarImage(
 -                url = header.avatarUrl,
@@ -153,6 +162,28 @@ index 2afbab7..a0dea12 100644
  
              if (!note.isNullOrBlank() && onEditNote != null) {
                  FlowNoteCard(
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelTabItems.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelTabItems.kt
+index b5fb998..18261e1 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelTabItems.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelTabItems.kt
+@@ -90,7 +90,7 @@ internal fun ChannelTabItems(
+                 spansOwnRow = { pagingItems.peek(it).spansRow() },
+                 includeLastRun = pagingItems.loadState.append.endOfPaginationReached,
+                 itemsKey = pagingItems.itemSnapshotList,
+-                compactRowSpacing = feedLayout.cardSpacing,
++                compactRowSpacing = 0.dp,
+             )
+         val sidePadding = if (isShorts) ShortCardDefaults.gridPadding(feedLayout) else plan.horizontalPadding
+         val padding =
+@@ -103,7 +103,7 @@ internal fun ChannelTabItems(
+                 )
+             }
+         // Even a zero-height item collects the row gutter, so a wide window with chips above adds none.
+-        val topGap = if (feedLayout.isCompact || !hasFilterBar) 8.dp else null
++        val topGap = if (feedLayout.isCompact || !hasFilterBar) 0.dp else null
+         val append = pagingItems.loadState.append
+ 
+         LazyVerticalGrid(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
 index e4bf73c..2815201 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
@@ -298,24 +329,10 @@ index d89c64b..84c0fe5 100644
          }
  
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
-index 729fd49..8b9b192 100644
+index 729fd49..13c1980 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
-@@ -12,6 +12,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
- import androidx.compose.runtime.Composable
- import androidx.compose.ui.Modifier
- import androidx.compose.ui.draw.clip
-+import androidx.compose.ui.graphics.RectangleShape
- import androidx.compose.ui.layout.Layout
- import androidx.compose.ui.text.style.TextOverflow
- import androidx.compose.ui.unit.Dp
-@@ -46,18 +47,20 @@ internal fun VideoCardStacked(
-         VideoCardThumbnail(
-             state = state,
-             isUpcoming = video.isUpcoming,
--            shape = MaterialTheme.shapes.large,
-+            // Square corners on the large feed thumbnail; the compact row thumbnail keeps its rounding.
-+            shape = RectangleShape,
+@@ -50,14 +50,15 @@ internal fun VideoCardStacked(
              modifier = Modifier.fillMaxWidth(),
          )
  
@@ -334,7 +351,7 @@ index 729fd49..8b9b192 100644
              avatar = {
                  if (showChannel) {
                      ChannelAvatarStack(
-@@ -169,17 +172,19 @@ private fun CardDetailsRow(
+@@ -169,17 +170,19 @@ private fun CardDetailsRow(
          val avatarPlaceables = avatarMeasurables.map { it.measure(loose) }
          val avatarWidth = avatarPlaceables.maxOfOrNull { it.width } ?: 0
          val showAvatar = showsAvatarBesideTitle(width, avatarWidth, actionsWidth, gap, MinTitleWidth.roundToPx())
