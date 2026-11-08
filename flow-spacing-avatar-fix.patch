@@ -1,3 +1,158 @@
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
+index e948dad..427b4f0 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
+@@ -16,7 +16,8 @@ import coil3.compose.AsyncImage
+ import io.github.aedev.flow.R
+ import io.github.aedev.flow.ui.components.shared.thumbnailUrlOrNull
+ 
+-internal const val CHANNEL_BANNER_ASPECT_RATIO = 1060f / 175f
++// YouTube's channel banner on a phone: about 660 x 180 dp, filled edge to edge.
++internal const val CHANNEL_BANNER_ASPECT_RATIO = 660f / 180f
+ 
+ @Composable
+ internal fun ChannelBanner(
+@@ -42,7 +43,7 @@ internal fun ChannelBanner(
+         model = bannerUrl,
+         contentDescription = stringResource(R.string.channel_banner),
+         modifier = bannerModifier,
+-        contentScale = ContentScale.Fit,
++        contentScale = ContentScale.Crop,
+         onError = { result ->
+             Log.e(
+                 "ChannelBanner",
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
+index 2afbab7..a0dea12 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelHeaderSection.kt
+@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
+ import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.gestures.detectTapGestures
+ import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.Row
+ import androidx.compose.foundation.layout.Spacer
+@@ -39,6 +41,7 @@ import io.github.aedev.flow.innertube.pages.channel.ChannelHeader
+ import io.github.aedev.flow.ui.components.shared.ChannelAvatarImage
+ import io.github.aedev.flow.ui.components.shared.FlowNoteCard
+ import io.github.aedev.flow.ui.components.shared.FlowSubscribeButton
++import io.github.aedev.flow.ui.components.shared.FlowSubscribeButtonSize
+ import io.github.aedev.flow.ui.components.shared.FullSizeImageDialog
+ import io.github.aedev.flow.ui.theme.extendedColors
+ import io.github.aedev.flow.utils.ThumbnailUrlResolver
+@@ -77,27 +80,58 @@ internal fun ChannelHeaderSection(
+             ChannelBanner(imageUrl = bannerUrl)
+         }
+ 
+-        Row(
++        // YouTube's channel header: avatar on the left with the name beside it, then a full-width
++        // subscribe button.
++        Column(
+             modifier =
+                 Modifier
+                     .fillMaxWidth()
+                     .padding(horizontal = 16.dp)
+-                    .padding(top = 14.dp, bottom = 4.dp),
+-            verticalAlignment = Alignment.CenterVertically,
+-            horizontalArrangement = Arrangement.spacedBy(12.dp),
++                    .padding(top = 12.dp, bottom = 12.dp),
+         ) {
+-            ChannelAvatarImage(
+-                url = header.avatarUrl,
+-                contentDescription = stringResource(R.string.channel_avatar),
+-                modifier =
+-                    Modifier
+-                        .size(72.dp)
+-                        .clip(CircleShape)
+-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+-                        .clickable(enabled = header.avatarUrl.isNotEmpty()) { showFullSizeAvatar = true },
+-            )
++            Row(
++                modifier = Modifier.fillMaxWidth(),
++                verticalAlignment = Alignment.Top,
++            ) {
++                ChannelAvatarImage(
++                    url = header.avatarUrl,
++                    contentDescription = stringResource(R.string.channel_avatar),
++                    modifier =
++                        Modifier
++                            .size(68.dp)
++                            .clip(CircleShape)
++                            .background(MaterialTheme.colorScheme.surfaceVariant)
++                            .clickable(enabled = header.avatarUrl.isNotEmpty()) { showFullSizeAvatar = true },
++                )
++
++                Spacer(modifier = Modifier.width(16.dp))
++
++                Column(
++                    modifier = Modifier.weight(1f),
++                    verticalArrangement = Arrangement.spacedBy(2.dp),
++                ) {
++                    ChannelName(header.title)
++
++                    header.handle?.let { handle ->
++                        Text(
++                            text = handle,
++                            style = MaterialTheme.typography.bodyMedium,
++                            color = MaterialTheme.extendedColors.textSecondary,
++                        )
++                    }
++
++                    val stats = listOfNotNull(header.subscriberCountText, header.videoCountText)
++                    if (stats.isNotEmpty()) {
++                        Text(
++                            text = stats.joinToString(" \u2022 "),
++                            style = MaterialTheme.typography.bodyMedium,
++                            color = MaterialTheme.extendedColors.textSecondary,
++                        )
++                    }
++                }
++            }
+ 
+-            Spacer(modifier = Modifier.weight(1f))
++            Spacer(modifier = Modifier.height(12.dp))
+ 
+             FlowSubscribeButton(
+                 isSubscribed = isSubscribed,
+@@ -107,34 +141,9 @@ internal fun ChannelHeaderSection(
+                 onNotificationChange = onNotificationChange,
+                 onManageGroups = onManageGroups,
+                 onAddNote = onEditNote,
++                size = FlowSubscribeButtonSize.Wide,
++                modifier = Modifier.fillMaxWidth(),
+             )
+-        }
+-
+-        Column(
+-            modifier =
+-                Modifier
+-                    .fillMaxWidth()
+-                    .padding(horizontal = 16.dp)
+-                    .padding(bottom = 16.dp),
+-            verticalArrangement = Arrangement.spacedBy(3.dp),
+-        ) {
+-            ChannelName(header.title)
+-
+-            val metadata = remember(header) { listOfNotNull(header.handle, header.subscriberCountText, header.videoCountText) }
+-            if (metadata.isNotEmpty()) {
+-                Row(
+-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+-                    verticalAlignment = Alignment.CenterVertically,
+-                ) {
+-                    metadata.forEach { entry ->
+-                        Text(
+-                            text = entry,
+-                            style = MaterialTheme.typography.bodySmall,
+-                            color = MaterialTheme.extendedColors.textSecondary,
+-                        )
+-                    }
+-                }
+-            }
+ 
+             if (!note.isNullOrBlank() && onEditNote != null) {
+                 FlowNoteCard(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
 index e4bf73c..2815201 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
@@ -143,30 +298,43 @@ index d89c64b..84c0fe5 100644
          }
  
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
-index 729fd49..5753f59 100644
+index 729fd49..8b9b192 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
-@@ -50,14 +50,15 @@ internal fun VideoCardStacked(
+@@ -12,6 +12,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
+ import androidx.compose.runtime.Composable
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.RectangleShape
+ import androidx.compose.ui.layout.Layout
+ import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.Dp
+@@ -46,18 +47,20 @@ internal fun VideoCardStacked(
+         VideoCardThumbnail(
+             state = state,
+             isUpcoming = video.isUpcoming,
+-            shape = MaterialTheme.shapes.large,
++            // Square corners on the large feed thumbnail; the compact row thumbnail keeps its rounding.
++            shape = RectangleShape,
              modifier = Modifier.fillMaxWidth(),
          )
  
 -        // The avatar's 48 dp target overhangs its 40 dp image by 4 dp, so the row gives those 4 dp back
 -        // and the avatar still lines up where it always has.
 +        // The avatar's 48 dp target overhangs its 40 dp image by 4 dp on every side. CardDetailsRow
-+        // pulls the image back by that overhang, so the visible avatar sits flush with the
-+        // thumbnail's left edge and the top of the title instead of 12 dp in and 4 dp down.
++        // pulls the image back by that overhang, so the visible 40 dp avatar sits 12 dp in from the
++        // card edge, the same as the thumbnail's text inset.
          CardDetailsRow(
--            spacing = if (showChannel) 8.dp else 12.dp,
-+            spacing = 12.dp,
+             spacing = if (showChannel) 8.dp else 12.dp,
              modifier =
                  Modifier
                      .fillMaxWidth()
 -                    .padding(start = if (showChannel) 8.dp else 12.dp, top = 12.dp, bottom = 12.dp),
-+                    .padding(start = if (showChannel) 0.dp else 12.dp, top = 12.dp, bottom = 12.dp),
++                    .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
              avatar = {
                  if (showChannel) {
                      ChannelAvatarStack(
-@@ -169,17 +170,19 @@ private fun CardDetailsRow(
+@@ -169,17 +172,19 @@ private fun CardDetailsRow(
          val avatarPlaceables = avatarMeasurables.map { it.measure(loose) }
          val avatarWidth = avatarPlaceables.maxOfOrNull { it.width } ?: 0
          val showAvatar = showsAvatarBesideTitle(width, avatarWidth, actionsWidth, gap, MinTitleWidth.roundToPx())
