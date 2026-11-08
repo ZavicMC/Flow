@@ -1,0 +1,183 @@
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
+index e4bf73c..7704e39 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowBottomSheet.kt
+@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.height
+ import androidx.compose.foundation.layout.heightIn
+ import androidx.compose.foundation.layout.navigationBarsPadding
++import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.widthIn
+ import androidx.compose.material3.BottomSheetDefaults
+ import androidx.compose.material3.ExperimentalMaterial3Api
+@@ -274,7 +275,7 @@ fun FlowBottomSheet(
+                                 .then(dragModifier),
+                         contentAlignment = Alignment.Center,
+                     ) {
+-                        BottomSheetDefaults.DragHandle()
++                        FlowSheetDragHandle()
+                     }
+                 }
+                 content()
+@@ -282,3 +283,13 @@ fun FlowBottomSheet(
+         }
+     }
+ }
++
++/**
++ * The sheet drag handle with the padding YouTube uses. M3's default adds 22 dp above and below the
++ * 4 dp bar, which leaves a 48 dp strip between the player and the sheet title.
++ */
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++internal fun FlowSheetDragHandle(modifier: Modifier = Modifier) {
++    BottomSheetDefaults.DragHandle(modifier = modifier.padding(vertical = 8.dp))
++}
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowCommentsBottomSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowCommentsBottomSheet.kt
+index 24cd975..0596282 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowCommentsBottomSheet.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowCommentsBottomSheet.kt
+@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.lazy.rememberLazyListState
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.Close
+-import androidx.compose.material3.BottomSheetDefaults
+-import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.HorizontalDivider
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+@@ -113,7 +111,6 @@ fun FlowCommentsBottomSheet(
+     }
+ }
+ 
+-@OptIn(ExperimentalMaterial3Api::class)
+ @Composable
+ private fun CommentsSheetHeader(
+     selectedFilter: CommentSortFilter,
+@@ -126,13 +123,10 @@ private fun CommentsSheetHeader(
+ ) {
+     Column(modifier = dragModifier) {
+         Box(
+-            modifier =
+-                Modifier
+-                    .fillMaxWidth()
+-                    .padding(top = 4.dp),
++            modifier = Modifier.fillMaxWidth(),
+             contentAlignment = Alignment.Center,
+         ) {
+-            BottomSheetDefaults.DragHandle()
++            FlowSheetDragHandle()
+         }
+ 
+         Column(
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowSheetHeader.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowSheetHeader.kt
+index d89c64b..84c0fe5 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowSheetHeader.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/FlowSheetHeader.kt
+@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.automirrored.filled.ArrowBack
+ import androidx.compose.material.icons.filled.Close
+-import androidx.compose.material3.BottomSheetDefaults
+ import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.HorizontalDivider
+ import androidx.compose.material3.Icon
+@@ -86,13 +85,10 @@ fun FlowSheetHeader(
+             Spacer(Modifier.height(FlowSheetHeaderDefaults.SidePaneTopPadding))
+         } else if (showDragHandle) {
+             Box(
+-                modifier =
+-                    Modifier
+-                        .fillMaxWidth()
+-                        .padding(top = 4.dp),
++                modifier = Modifier.fillMaxWidth(),
+                 contentAlignment = Alignment.Center,
+             ) {
+-                BottomSheetDefaults.DragHandle()
++                FlowSheetDragHandle()
+             }
+         }
+ 
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
+index 729fd49..5753f59 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
+@@ -50,14 +50,15 @@ internal fun VideoCardStacked(
+             modifier = Modifier.fillMaxWidth(),
+         )
+ 
+-        // The avatar's 48 dp target overhangs its 40 dp image by 4 dp, so the row gives those 4 dp back
+-        // and the avatar still lines up where it always has.
++        // The avatar's 48 dp target overhangs its 40 dp image by 4 dp on every side. CardDetailsRow
++        // pulls the image back by that overhang, so the visible avatar sits flush with the
++        // thumbnail's left edge and the top of the title instead of 12 dp in and 4 dp down.
+         CardDetailsRow(
+-            spacing = if (showChannel) 8.dp else 12.dp,
++            spacing = 12.dp,
+             modifier =
+                 Modifier
+                     .fillMaxWidth()
+-                    .padding(start = if (showChannel) 8.dp else 12.dp, top = 12.dp, bottom = 12.dp),
++                    .padding(start = if (showChannel) 0.dp else 12.dp, top = 12.dp, bottom = 12.dp),
+             avatar = {
+                 if (showChannel) {
+                     ChannelAvatarStack(
+@@ -169,17 +170,19 @@ private fun CardDetailsRow(
+         val avatarPlaceables = avatarMeasurables.map { it.measure(loose) }
+         val avatarWidth = avatarPlaceables.maxOfOrNull { it.width } ?: 0
+         val showAvatar = showsAvatarBesideTitle(width, avatarWidth, actionsWidth, gap, MinTitleWidth.roundToPx())
+-        val textX = if (showAvatar) avatarWidth + gap else 0
++        // How far the touch target extends past the visible avatar image on each side.
++        val overhang = ((avatarWidth - VideoCardDefaults.AvatarSize.roundToPx()) / 2).coerceAtLeast(0)
++        val textX = if (showAvatar) avatarWidth - 2 * overhang + gap else 0
+         val textWidth = (width - actionsWidth - gap - textX).coerceAtLeast(0)
+         val textPlaceables = textMeasurables.map { it.measure(loose.copy(minWidth = textWidth, maxWidth = textWidth)) }
+         val height =
+             maxOf(
+                 textPlaceables.maxOfOrNull { it.height } ?: 0,
+-                if (showAvatar) avatarPlaceables.maxOfOrNull { it.height } ?: 0 else 0,
++                if (showAvatar) (avatarPlaceables.maxOfOrNull { it.height } ?: 0) - overhang else 0,
+                 actionPlaceables.maxOfOrNull { it.height } ?: 0,
+             ).coerceIn(constraints.minHeight, constraints.maxHeight)
+         layout(width, height) {
+-            if (showAvatar) avatarPlaceables.forEach { it.placeRelative(0, 0) }
++            if (showAvatar) avatarPlaceables.forEach { it.placeRelative(-overhang, -overhang) }
+             textPlaceables.forEach { it.placeRelative(textX, 0) }
+             actionPlaceables.forEach { it.placeRelative(width - actionsWidth, 0) }
+         }
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
+index 96258aa..6f6bf3c 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
+@@ -103,7 +103,7 @@ internal fun VideoInfoSection(
+         modifier =
+             modifier
+                 .fillMaxWidth()
+-                .padding(12.dp),
++                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp),
+     ) {
+         // ============ TITLE SECTION ============
+         val context = LocalContext.current
+@@ -184,11 +184,11 @@ internal fun VideoInfoSection(
+             }
+         }
+ 
+-        Spacer(modifier = Modifier.height(12.dp))
++        Spacer(modifier = Modifier.height(8.dp))
+ 
+         // ============ CHANNEL SECTION ============
+         Row(
+-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
++            modifier = Modifier.fillMaxWidth(),
+             verticalAlignment = Alignment.CenterVertically,
+             horizontalArrangement = Arrangement.SpaceBetween,
+         ) {
+@@ -254,7 +254,7 @@ internal fun VideoInfoSection(
+             }
+         }
+ 
+-        Spacer(modifier = Modifier.height(8.dp))
++        Spacer(modifier = Modifier.height(12.dp))
+ 
+         // ============ ACTION ROW ============
+         VideoActionRow(
