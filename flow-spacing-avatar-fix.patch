@@ -328,6 +328,27 @@ index d89c64b..84c0fe5 100644
              }
          }
  
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/SaveToCollectionSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/SaveToCollectionSheet.kt
+index f6a7f44..e37b49b 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/SaveToCollectionSheet.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/SaveToCollectionSheet.kt
+@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.Add
+ import androidx.compose.material.icons.filled.Bookmark
+ import androidx.compose.material.icons.outlined.BookmarkBorder
+-import androidx.compose.material3.BottomSheetDefaults
+ import androidx.compose.material3.ButtonDefaults
+ import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+@@ -73,7 +72,7 @@ fun SaveToCollectionSheet(
+         onDismissRequest = onDismiss,
+         sheetState = rememberFlowSheetState(),
+         containerColor = MaterialTheme.colorScheme.surface,
+-        dragHandle = { BottomSheetDefaults.DragHandle() },
++        dragHandle = { FlowSheetDragHandle() },
+     ) {
+         CollectionSheetContent(
+             title = title,
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
 index 729fd49..13c1980 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/card/VideoCardStacked.kt
@@ -374,6 +395,26 @@ index 729fd49..13c1980 100644
              textPlaceables.forEach { it.placeRelative(textX, 0) }
              actionPlaceables.forEach { it.placeRelative(width - actionsWidth, 0) }
          }
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/quickactions/QuickActionsSheet.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/quickactions/QuickActionsSheet.kt
+index 23bf929..dfe07da 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/components/shared/quickactions/QuickActionsSheet.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/quickactions/QuickActionsSheet.kt
+@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Dp
+ import androidx.compose.ui.unit.dp
+ import io.github.aedev.flow.ui.components.shared.FlowModalSheetDefaults
+ import io.github.aedev.flow.ui.components.shared.FlowRowGroup
++import io.github.aedev.flow.ui.components.shared.FlowSheetDragHandle
+ import io.github.aedev.flow.ui.components.shared.FlowSectionHeader
+ import io.github.aedev.flow.ui.components.shared.FlowSheetHeader
+ import io.github.aedev.flow.ui.components.shared.FlowSheetPresenter
+@@ -135,6 +136,7 @@ fun QuickActionsSheet(
+         properties = properties,
+         modifier = FlowModalSheetDefaults.modifier,
+         contentWindowInsets = FlowModalSheetDefaults.contentWindowInsets,
++        dragHandle = { FlowSheetDragHandle() },
+     ) {
+         BackHandler(enabled = onBack != null) { onBack?.invoke() }
+         Column(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/CommentsPreview.kt b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/CommentsPreview.kt
 index 5ca359e..8832ff1 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/CommentsPreview.kt
