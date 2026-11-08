@@ -5,13 +5,24 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
       - run: git apply flow-spacing-avatar-fix.patch
       - run: chmod +x gradlew
-      - run: ./gradlew :app:assembleGithubDebug
+      - name: Build
+        run: |
+          for i in 1 2 3; do
+            ./gradlew :app:assembleGithubDebug --no-configuration-cache \
+              -Dorg.gradle.internal.http.connectionTimeout=180000 \
+              -Dorg.gradle.internal.http.socketTimeout=180000 \
+              -Dorg.gradle.internal.repository.max.retries=10 && exit 0
+            echo "Attempt $i failed"
+            sleep 20
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: flow-debug
