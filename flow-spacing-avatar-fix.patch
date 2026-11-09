@@ -184,17 +184,21 @@ index b5fb998..18261e1 100644
          val append = pagingItems.loadState.append
  
          LazyVerticalGrid(
-diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicTransportBar.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicTransportBar.kt
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
 new file mode 100644
-index 0000000..824010f
+index 0000000..1a7ec5d
 --- /dev/null
-+++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicTransportBar.kt
-@@ -0,0 +1,232 @@
++++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
+@@ -0,0 +1,290 @@
 +package io.github.aedev.flow.ui.components.musicplayer.controls
 +
 +import androidx.compose.animation.AnimatedContent
 +import androidx.compose.animation.core.Animatable
++import androidx.compose.animation.core.AnimationVector1D
++import androidx.compose.animation.core.CubicBezierEasing
++import androidx.compose.animation.core.Easing
 +import androidx.compose.animation.core.spring
++import androidx.compose.animation.core.tween
 +import androidx.compose.animation.fadeIn
 +import androidx.compose.animation.fadeOut
 +import androidx.compose.animation.scaleIn
@@ -202,12 +206,13 @@ index 0000000..824010f
 +import androidx.compose.animation.togetherWith
 +import androidx.compose.foundation.background
 +import androidx.compose.foundation.combinedClickable
++import androidx.compose.foundation.gestures.detectTapGestures
 +import androidx.compose.foundation.interaction.MutableInteractionSource
 +import androidx.compose.foundation.interaction.collectIsPressedAsState
 +import androidx.compose.foundation.layout.Arrangement
 +import androidx.compose.foundation.layout.Box
 +import androidx.compose.foundation.layout.Row
-+import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.fillMaxSize
 +import androidx.compose.foundation.layout.height
 +import androidx.compose.foundation.layout.size
 +import androidx.compose.foundation.layout.width
@@ -219,6 +224,7 @@ index 0000000..824010f
 +import androidx.compose.material.icons.rounded.SkipPrevious
 +import androidx.compose.material3.Icon
 +import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Surface
 +import androidx.compose.material3.ripple
 +import androidx.compose.runtime.Composable
 +import androidx.compose.runtime.LaunchedEffect
@@ -226,147 +232,175 @@ index 0000000..824010f
 +import androidx.compose.runtime.mutableIntStateOf
 +import androidx.compose.runtime.mutableStateOf
 +import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
 +import androidx.compose.runtime.setValue
 +import androidx.compose.ui.Alignment
-+import androidx.compose.ui.draw.clip
-+import androidx.compose.ui.graphics.vector.ImageVector
-+import androidx.compose.ui.res.stringResource
 +import androidx.compose.ui.Modifier
-+import androidx.compose.ui.graphics.graphicsLayer
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.input.pointer.pointerInput
++import androidx.compose.ui.res.stringResource
 +import androidx.compose.ui.unit.Dp
 +import androidx.compose.ui.unit.dp
 +import io.github.aedev.flow.R
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.launch
 +
-+/** Geometry and motion constants from the spec. */
-+object MusicTransportSpec {
-+    val Height: Dp = 64.dp
++/**
++ * Geometry and timing from the reference recording (51 fps).
++ *
++ * Source values are in video pixels. [PX_PER_DP] converts them to dp; 3 px per dp matches a
++ * 1080-wide phone. Widths are kept as plain Floats (dp) so the spring maths runs without rounding.
++ */
++internal object PlaybackSpec {
++    const val PX_PER_DP = 3f
++
++    private fun px(v: Float) = v / PX_PER_DP
++
++    // Side (Previous / Next) buttons: 169 x 136 px, squircle.
++    val SideWidth: Dp = px(169f).dp
++    val SideHeight: Dp = px(136f).dp
++    val SideCorner: Dp = 24.dp
 +    val Gap: Dp = 16.dp
-+    const val SIDE_ASPECT_RATIO = 1.25f // width : height
-+    val SideCorner: Dp = 26.dp // within the 24–28 dp squircle range
-+    const val CENTER_WIDTH_MULTIPLIER = 1.6f // relative to a side button's width
-+    const val STRETCH_SCALE = 1.17f
-+    const val PRESS_SCALE = 0.92f
-+    const val DAMPING_RATIO = 0.7f
-+    const val STIFFNESS_STRETCH = 1500f
-+    const val STIFFNESS_RECOIL = 400f
++
++    // Centre pill: 270 x 135 px at rest.
++    val HeightDp: Dp = px(135f).dp
++    val RestWidth = px(270f) // Phase 4 settles here
++    val PeakWidth = px(300f) // Phase 1 peak
++    val UndershootWidth = px(266f) // Phase 3 undershoot
++    val PressWidth = px(244f) // Press compression
++    val ReleaseWidth = px(274f) // Spring-out target after release
++
++    // Phase timings (ms).
++    const val EXPAND_MS = 117
++    const val HOLD_MS = 117
++    const val RECOIL_MS = 136 // 234 ms -> 370 ms
++    const val PRESS_MS = 156
++
++    // Easing curves.
++    val StiffSnap: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
++    val PressEase: Easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
++    // Not given in the spec for the recoil leg; this is a standard ease-in-out.
++    val RecoilEase: Easing = CubicBezierEasing(0.4f, 0f, 0.6f, 1f)
++
++    // Springs.
++    val SettleSpring = spring<Float>(dampingRatio = 0.68f, stiffness = 380f)
++    val ReboundSpring = spring<Float>(dampingRatio = 0.75f, stiffness = 450f)
 +}
 +
 +/**
-+ * Previous, play/pause and next controls for the music player.
++ * Previous, Play/Pause and Next.
 + *
-+ * Usage: pass the same callbacks the old MediaPlaybackControls received.
-+ * [skipTrigger] is a counter the caller increments whenever the track changes, which drives the
-+ * elastic stretch of the centre pill; a stretch also fires on a local Previous/Next tap.
++ * [trackKey] is any value that changes with the track. A change plays the same stretch as a
++ * Previous/Next tap. [onPlayPauseChange] receives the new playing state after the release.
 + */
 +@Composable
-+fun MusicTransportBar(
++fun MusicPlaybackControls(
 +    isPlaying: Boolean,
-+    onPreviousClick: () -> Unit,
-+    onPlayPauseToggle: () -> Unit,
-+    onNextClick: () -> Unit,
++    onPrevious: () -> Unit,
++    onNext: () -> Unit,
++    onPlayPauseChange: (Boolean) -> Unit,
 +    modifier: Modifier = Modifier,
-+    skipTrigger: Int = 0,
++    trackKey: Any? = null,
 +    onLongPressPrevious: (() -> Unit)? = null,
 +    onLongPressNext: (() -> Unit)? = null,
 +    onLongPressEnd: (() -> Unit)? = null,
 +) {
-+    val sideWidth = MusicTransportSpec.Height * MusicTransportSpec.SIDE_ASPECT_RATIO
-+    val centerWidth = sideWidth * MusicTransportSpec.CENTER_WIDTH_MULTIPLIER
++    val scope = rememberCoroutineScope()
++    val width = remember { Animatable(PlaybackSpec.RestWidth) }
++    var playing by remember(isPlaying) { mutableStateOf(isPlaying) }
++    var skipCount by remember { mutableIntStateOf(0) }
 +
-+    var localSkips by remember { mutableIntStateOf(0) }
-+    val stretch = remember { Animatable(1f) }
-+    val pressSquish = remember { Animatable(1f) }
-+
-+    val playPauseInteraction = remember { MutableInteractionSource() }
-+    val isCenterPressed by playPauseInteraction.collectIsPressedAsState()
-+
-+    // Elastic stretch: snap wide quickly, then recoil with a damped spring that settles at 1.0x.
-+    val totalSkips = skipTrigger + localSkips
-+    LaunchedEffect(totalSkips) {
-+        if (totalSkips == 0) return@LaunchedEffect
-+        stretch.animateTo(
-+            MusicTransportSpec.STRETCH_SCALE,
-+            spring(
-+                dampingRatio = MusicTransportSpec.DAMPING_RATIO,
-+                stiffness = MusicTransportSpec.STIFFNESS_STRETCH,
-+            ),
-+        )
-+        stretch.animateTo(
-+            1f,
-+            spring(
-+                dampingRatio = MusicTransportSpec.DAMPING_RATIO,
-+                stiffness = MusicTransportSpec.STIFFNESS_RECOIL,
-+            ),
-+        )
++    // Track-change stretch. The first composition is not a change, so it is skipped.
++    var lastTrackKey by remember { mutableStateOf(trackKey) }
++    LaunchedEffect(trackKey) {
++        if (trackKey != lastTrackKey) {
++            lastTrackKey = trackKey
++            skipCount++
++        }
 +    }
 +
-+    LaunchedEffect(isCenterPressed) {
-+        pressSquish.animateTo(
-+            if (isCenterPressed) MusicTransportSpec.PRESS_SCALE else 1f,
-+            spring(dampingRatio = 0.6f, stiffness = 600f),
-+        )
++    LaunchedEffect(skipCount) {
++        if (skipCount > 0) width.playSkipStretch()
 +    }
 +
 +    Row(
-+        modifier = modifier.fillMaxWidth().height(MusicTransportSpec.Height),
-+        horizontalArrangement = Arrangement.spacedBy(MusicTransportSpec.Gap, Alignment.CenterHorizontally),
++        modifier = modifier,
++        horizontalArrangement = Arrangement.spacedBy(PlaybackSpec.Gap, Alignment.CenterHorizontally),
 +        verticalAlignment = Alignment.CenterVertically,
 +    ) {
 +        SideButton(
 +            icon = Icons.Rounded.SkipPrevious,
-+            contentDescription = stringResource(R.string.previous),
-+            width = sideWidth,
++            description = stringResource(R.string.previous),
 +            onClick = {
-+                localSkips++
-+                onPreviousClick()
++                skipCount++
++                onPrevious()
 +            },
 +            onLongClick = onLongPressPrevious,
 +            onLongClickEnd = onLongPressEnd,
 +        )
 +
-+        Box(
++        val containerColor =
++            if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
++        val contentColor =
++            if (playing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
++
++        Surface(
 +            modifier =
 +                Modifier
-+                    .width(centerWidth)
-+                    .height(MusicTransportSpec.Height)
-+                    .graphicsLayer {
-+                        scaleX = stretch.value * pressSquish.value
-+                        scaleY = pressSquish.value
-+                    }
-+                    .clip(RoundedCornerShape(9999.dp))
-+                    .background(MaterialTheme.colorScheme.primary)
-+                    .combinedClickable(
-+                        interactionSource = playPauseInteraction,
-+                        indication = ripple(color = MaterialTheme.colorScheme.onPrimary),
-+                        onClick = onPlayPauseToggle,
-+                        onClickLabel = stringResource(if (isPlaying) R.string.pause else R.string.play),
-+                    ),
-+            contentAlignment = Alignment.Center,
++                    .width(width.value.dp)
++                    .height(PlaybackSpec.HeightDp)
++                    .pointerInput(Unit) {
++                        detectTapGestures(
++                            onPress = {
++                                scope.launch {
++                                    width.animateTo(
++                                        PlaybackSpec.PressWidth,
++                                        tween(PlaybackSpec.PRESS_MS, easing = PlaybackSpec.PressEase),
++                                    )
++                                }
++                                val released = tryAwaitRelease()
++                                scope.launch {
++                                    width.animateTo(PlaybackSpec.ReleaseWidth, PlaybackSpec.ReboundSpring)
++                                    width.animateTo(PlaybackSpec.RestWidth, PlaybackSpec.SettleSpring)
++                                }
++                                if (released) {
++                                    playing = !playing
++                                    onPlayPauseChange(playing)
++                                }
++                            },
++                        )
++                    },
++            shape = RoundedCornerShape(percent = 50),
++            color = containerColor,
++            contentColor = contentColor,
 +        ) {
-+            AnimatedContent(
-+                targetState = isPlaying,
-+                transitionSpec = {
-+                    (fadeIn(spring(stiffness = 800f)) + scaleIn(initialScale = 0.7f)) togetherWith
-+                        (fadeOut(spring(stiffness = 800f)) + scaleOut(targetScale = 0.7f))
-+                },
-+                label = "playPauseIcon",
-+            ) { playing ->
-+                Icon(
-+                    imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-+                    contentDescription = null,
-+                    tint = MaterialTheme.colorScheme.onPrimary,
-+                    modifier = Modifier.size(36.dp),
-+                )
++            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
++                AnimatedContent(
++                    targetState = playing,
++                    transitionSpec = {
++                        (fadeIn(tween(120)) + scaleIn(initialScale = 0.7f)) togetherWith
++                            (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f))
++                    },
++                    label = "playPauseMorph",
++                ) { isPlayingNow ->
++                    Icon(
++                        imageVector = if (isPlayingNow) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
++                        contentDescription = null,
++                        tint = contentColor,
++                        modifier = Modifier.size(PlaybackSpec.HeightDp * 0.5f),
++                    )
++                }
 +            }
 +        }
 +
 +        SideButton(
 +            icon = Icons.Rounded.SkipNext,
-+            contentDescription = stringResource(R.string.next),
-+            width = sideWidth,
++            description = stringResource(R.string.next),
 +            onClick = {
-+                localSkips++
-+                onNextClick()
++                skipCount++
++                onNext()
 +            },
 +            onLongClick = onLongPressNext,
 +            onLongClickEnd = onLongPressEnd,
@@ -374,37 +408,42 @@ index 0000000..824010f
 +    }
 +}
 +
++/**
++ * Phases 1-4 of the Previous/Next stretch, with the timings from the recording:
++ * 0-117 ms expand to 300 px, 117-234 ms hold, 234-370 ms recoil to 266 px, 370-520 ms settle to 270 px.
++ */
++private suspend fun Animatable<Float, AnimationVector1D>.playSkipStretch() {
++    animateTo(
++        PlaybackSpec.PeakWidth,
++        tween(PlaybackSpec.EXPAND_MS, easing = PlaybackSpec.StiffSnap),
++    )
++    delay(PlaybackSpec.HOLD_MS.toLong())
++    animateTo(
++        PlaybackSpec.UndershootWidth,
++        tween(PlaybackSpec.RECOIL_MS, easing = PlaybackSpec.RecoilEase),
++    )
++    animateTo(PlaybackSpec.RestWidth, PlaybackSpec.SettleSpring)
++}
++
 +@Composable
 +private fun SideButton(
 +    icon: ImageVector,
-+    contentDescription: String,
-+    width: Dp,
++    description: String,
 +    onClick: () -> Unit,
 +    onLongClick: (() -> Unit)?,
 +    onLongClickEnd: (() -> Unit)?,
 +) {
 +    val interaction = remember { MutableInteractionSource() }
 +    val pressed by interaction.collectIsPressedAsState()
-+    val squish = remember { Animatable(1f) }
 +    LaunchedEffect(pressed) {
-+        squish.animateTo(
-+            if (pressed) MusicTransportSpec.PRESS_SCALE else 1f,
-+            spring(dampingRatio = 0.6f, stiffness = 600f),
-+        )
-+        // Releasing the finger ends a long-press preview. Harmless on a plain tap.
 +        if (!pressed) onLongClickEnd?.invoke()
 +    }
 +
 +    Box(
 +        modifier =
 +            Modifier
-+                .width(width)
-+                .height(MusicTransportSpec.Height)
-+                .graphicsLayer {
-+                    scaleX = squish.value
-+                    scaleY = squish.value
-+                }
-+                .clip(RoundedCornerShape(MusicTransportSpec.SideCorner))
++                .size(width = PlaybackSpec.SideWidth, height = PlaybackSpec.SideHeight)
++                .clip(RoundedCornerShape(PlaybackSpec.SideCorner))
 +                .background(MaterialTheme.colorScheme.secondaryContainer)
 +                .combinedClickable(
 +                    interactionSource = interaction,
@@ -416,14 +455,33 @@ index 0000000..824010f
 +    ) {
 +        Icon(
 +            imageVector = icon,
-+            contentDescription = contentDescription,
++            contentDescription = description,
 +            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-+            modifier = Modifier.size(32.dp),
++            modifier = Modifier.size(PlaybackSpec.SideHeight * 0.5f),
++        )
++    }
++}
++
++/** Standalone preview: 0C100F background, both behaviours wired to buttons for testing. */
++@Composable
++fun MusicPlaybackControlsDemo() {
++    var playing by remember { mutableStateOf(true) }
++    var track by remember { mutableIntStateOf(0) }
++    Box(
++        modifier = Modifier.fillMaxSize().background(Color(0xFF0C100F)),
++        contentAlignment = Alignment.Center,
++    ) {
++        MusicPlaybackControls(
++            isPlaying = playing,
++            trackKey = track,
++            onPrevious = { track-- },
++            onNext = { track++ },
++            onPlayPauseChange = { playing = it },
 +        )
 +    }
 +}
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
-index 332e561..44f0a12 100644
+index 332e561..c5de283 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
 @@ -51,7 +51,7 @@ import io.github.aedev.flow.ui.components.musicplayer.queue.QueueSheet
@@ -431,23 +489,27 @@ index 332e561..44f0a12 100644
  import io.github.aedev.flow.ui.components.musicplayer.queue.rememberQueuePullUpState
  import io.github.aedev.flow.ui.components.shared.MediaPalette
 -import io.github.aedev.flow.ui.components.shared.MediaPlaybackControls
-+import io.github.aedev.flow.ui.components.musicplayer.controls.MusicTransportBar
++import io.github.aedev.flow.ui.components.musicplayer.controls.MusicPlaybackControls
  import io.github.aedev.flow.ui.components.shared.MediaSleepTimerSheet
  import io.github.aedev.flow.ui.components.shared.SkipDirection
  import io.github.aedev.flow.ui.components.shared.quickactions.QuickActionUndo
-@@ -312,14 +312,15 @@ internal fun FullMusicPlayerContent(
+@@ -312,14 +312,16 @@ internal fun FullMusicPlayerContent(
                  },
                  controls = { modifier ->
                      MaterialTheme(colorScheme = controlScheme) {
 -                        MediaPlaybackControls(
-+                        MusicTransportBar(
++                        MusicPlaybackControls(
                              isPlaying = uiState.isPlaying,
 -                            isBuffering = uiState.isBuffering && isPlayerSheetExpanded,
-                             onPreviousClick = { viewModel.skipToPrevious() },
-                             onPlayPauseToggle = { viewModel.togglePlayPause() },
-                             onNextClick = { viewModel.skipToNext() },
+-                            onPreviousClick = { viewModel.skipToPrevious() },
+-                            onPlayPauseToggle = { viewModel.togglePlayPause() },
+-                            onNextClick = { viewModel.skipToNext() },
++                            onPrevious = { viewModel.skipToPrevious() },
++                            onNext = { viewModel.skipToNext() },
++                            onPlayPauseChange = { viewModel.togglePlayPause() },
                              modifier = modifier,
 -                            onPreviewDirectionChange = { previewDirection = it },
++                            trackKey = uiState.currentQueueIndex,
 +                            onLongPressPrevious = { previewDirection = SkipDirection.PREVIOUS },
 +                            onLongPressNext = { previewDirection = SkipDirection.NEXT },
 +                            onLongPressEnd = { previewDirection = null },
