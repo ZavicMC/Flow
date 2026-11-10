@@ -518,15 +518,16 @@ index 332e561..c5de283 100644
                  },
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/shared/DescriptionTexture.kt b/app/src/main/java/io/github/aedev/flow/ui/components/shared/DescriptionTexture.kt
 new file mode 100644
-index 0000000..3a21e97
+index 0000000..1a9f8cb
 --- /dev/null
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/shared/DescriptionTexture.kt
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,36 @@
 +package io.github.aedev.flow.ui.components.shared
 +
 +import android.graphics.Color as AndroidColor
 +import androidx.compose.ui.graphics.Color
 +import androidx.compose.ui.graphics.toArgb
++import kotlin.math.roundToInt
 +
 +/**
 + * Approximates the "Tekstur" gallery filter on the description sheet's cards.
@@ -546,7 +547,8 @@ index 0000000..3a21e97
 +    AndroidColor.colorToHSV(this.toArgb(), hsv)
 +    hsv[1] = (hsv[1] * SATURATION_GAIN).coerceIn(0f, 1f)
 +    hsv[2] = (hsv[2] * VALUE_GAIN).coerceIn(0f, 1f)
-+    val argb = AndroidColor.HSVToColor(alpha, hsv)
++    val alphaInt = (alpha * 255f).roundToInt().coerceIn(0, 255)
++    val argb = AndroidColor.HSVToColor(alphaInt, hsv)
 +    return Color(argb)
 +}
 +
@@ -822,16 +824,17 @@ index b36d60f..04607de 100644
          if (ambientActive) {
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/ambient/AmbientTint.kt b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/ambient/AmbientTint.kt
 new file mode 100644
-index 0000000..86915eb
+index 0000000..5c85701
 --- /dev/null
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/ambient/AmbientTint.kt
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,77 @@
 +package io.github.aedev.flow.ui.components.videoplayer.ambient
 +
 +import androidx.compose.animation.animateColorAsState
 +import androidx.compose.animation.core.tween
 +import androidx.compose.runtime.Composable
 +import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
 +import androidx.compose.ui.graphics.Color
 +import androidx.compose.ui.graphics.ImageBitmap
 +import androidx.compose.ui.graphics.asAndroidBitmap
