@@ -1,3 +1,38 @@
+diff --git a/app/src/main/java/io/github/aedev/flow/data/local/PlayerPreferences.kt b/app/src/main/java/io/github/aedev/flow/data/local/PlayerPreferences.kt
+index 90ab71c..8333331 100644
+--- a/app/src/main/java/io/github/aedev/flow/data/local/PlayerPreferences.kt
++++ b/app/src/main/java/io/github/aedev/flow/data/local/PlayerPreferences.kt
+@@ -93,6 +93,7 @@ class PlayerPreferences(
+         val AUTOPLAY_COUNTDOWN_SECONDS = intPreferencesKey("autoplay_countdown_seconds")
+         val VIDEO_LOOP_ENABLED = booleanPreferencesKey("video_loop_enabled")
+         val VIDEO_AMBIENT_MODE_ENABLED = booleanPreferencesKey("video_ambient_mode_enabled")
++        val VIDEO_AMBIENT_FULLSCREEN_ENABLED = booleanPreferencesKey("video_ambient_fullscreen_enabled")
+         val PREFERRED_SUBTITLE_LANGUAGE = stringPreferencesKey("preferred_subtitle_language")
+         val SUBTITLE_FONT_SIZE = floatPreferencesKey("subtitle_font_size")
+         val SUBTITLE_TEXT_COLOR = intPreferencesKey("subtitle_text_color")
+@@ -1909,6 +1910,22 @@ class PlayerPreferences(
+         }
+     }
+ 
++    // Fullscreen ambient is its own switch. Until it has been set it follows the normal-mode value,
++    // so existing users keep the glow in fullscreen.
++    val videoAmbientFullscreenEnabled: Flow<Boolean> =
++        context.playerPreferencesDataStore.data
++            .map { preferences ->
++                preferences[Keys.VIDEO_AMBIENT_FULLSCREEN_ENABLED]
++                    ?: preferences[Keys.VIDEO_AMBIENT_MODE_ENABLED]
++                    ?: false
++            }
++
++    suspend fun setVideoAmbientFullscreenEnabled(enabled: Boolean) {
++        context.playerPreferencesDataStore.edit { preferences ->
++            preferences[Keys.VIDEO_AMBIENT_FULLSCREEN_ENABLED] = enabled
++        }
++    }
++
+     // Video Loop
+     val videoLoopEnabled: Flow<Boolean> =
+         context.playerPreferencesDataStore.data
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt b/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
 index e948dad..a6a20b2 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/channel/ChannelBanner.kt
@@ -962,7 +997,7 @@ index e873a8d..7b4f79a 100644
          checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
          checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
-index 96258aa..803929d 100644
+index 96258aa..56d08a6 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/videoplayer/info/VideoInfoSection.kt
 @@ -103,7 +103,7 @@ internal fun VideoInfoSection(
@@ -970,7 +1005,7 @@ index 96258aa..803929d 100644
              modifier
                  .fillMaxWidth()
 -                .padding(12.dp),
-+                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
++                .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
      ) {
          // ============ TITLE SECTION ============
          val context = LocalContext.current
@@ -997,3 +1032,151 @@ index 96258aa..803929d 100644
  
          // ============ ACTION ROW ============
          VideoActionRow(
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/player/content/VideoInfoContent.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/player/content/VideoInfoContent.kt
+index a4a36e6..8810e12 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/player/content/VideoInfoContent.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/player/content/VideoInfoContent.kt
+@@ -1,5 +1,13 @@
+ package io.github.aedev.flow.ui.screens.player.content
+ 
++import io.github.aedev.flow.ui.components.videoplayer.ambient.ambientTinted
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.Brush
++import androidx.compose.ui.Modifier
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.background
+ import android.content.ClipData
+ import android.content.ClipboardManager
+ import android.content.Context
+@@ -91,6 +99,14 @@ internal fun VideoInfoContent(
+         )
+     }
+ 
++    // Ambient glow behind the info panel: the video's average colour fading into the page background.
++    val glowTop = ambientTinted(Color.Black, amount = 0.45f)
++    val glowBottom = MaterialTheme.colorScheme.background
++    val glowBrush = Brush.verticalGradient(listOf(glowTop, glowBottom))
++
++    Column(
++        modifier = Modifier.fillMaxWidth().background(glowBrush),
++    ) {
+     VideoInfoSection(
+         video = video,
+         title = resolvedVideoTitle,
+@@ -232,4 +248,6 @@ internal fun VideoInfoContent(
+             insertPositionMs = insertPositionMs,
+         )
+     }
++    }
+ }
++
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/player/stage/VideoStage.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/player/stage/VideoStage.kt
+index 876f6e3..3ffe77e 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/player/stage/VideoStage.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/player/stage/VideoStage.kt
+@@ -185,7 +185,9 @@ internal fun VideoStage(
+                     } else {
+                         0f
+                     },
+-                ambientMode = prefs.ambientModeEnabled && !isMinimized && !localIsInPipMode,
++                ambientMode =
++                    (if (screenState.isFullscreen) prefs.ambientFullscreenEnabled else prefs.ambientModeEnabled) &&
++                        !isMinimized && !localIsInPipMode,
+             )
+             if (expandedSurfacesMounted && !localIsInPipMode) {
+                 Media3SubtitleOverlay(
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
+index 0e1e1e7..f8177f9 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
+@@ -86,6 +86,7 @@ internal fun rememberVideoPlayerPreferences(context: Context): VideoPlayerPrefer
+     val savedSubtitleStyle by playerPreferences.subtitleStyle.collectAsState(initial = SubtitleStyle())
+     val rememberPlaybackSpeed by playerPreferences.rememberPlaybackSpeed.collectAsState(initial = false)
+     val ambientModeEnabled by playerPreferences.videoAmbientModeEnabled.collectAsState(initial = false)
++    val ambientFullscreenEnabled by playerPreferences.videoAmbientFullscreenEnabled.collectAsState(initial = false)
+     val adaptivePlayerSizeEnabled by playerPreferences.adaptivePlayerSizeEnabled.collectAsState(initial = true)
+     val groupedQualitySelectorEnabled by playerPreferences.groupedQualitySelectorEnabled.collectAsState(initial = false)
+     val lockModeEnabled by playerPreferences.overlayLockModeEnabled.collectAsState(initial = false)
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt
+index 67e358a..162245f 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt
+@@ -74,6 +74,7 @@ internal fun PlayerAppearanceScreen(
+     val sleepTimerButton by viewModel.sleepTimerButton.collectAsStateWithLifecycle()
+     val adaptiveSize by viewModel.adaptivePlayerSize.collectAsStateWithLifecycle()
+     val ambientMode by viewModel.ambientMode.collectAsStateWithLifecycle()
++    val ambientFullscreen by viewModel.ambientFullscreen.collectAsStateWithLifecycle()
+     val paidPromotion by viewModel.paidPromotionLabel.collectAsStateWithLifecycle()
+     val groupedQuality by viewModel.groupedQualitySelector.collectAsStateWithLifecycle()
+     val gestureOverlay by viewModel.gestureOverlay.collectAsStateWithLifecycle()
+@@ -207,6 +208,7 @@ internal fun PlayerAppearanceScreen(
+         group(key = "player_appearance.video", header = R.string.settings_section_video_player) {
+             switch(PlayerAppearanceIndex.adaptiveSize, adaptiveSize, viewModel::setAdaptivePlayerSize)
+             switch(PlayerAppearanceIndex.ambientMode, ambientMode, viewModel::setAmbientMode)
++            switch(PlayerAppearanceIndex.ambientFullscreen, ambientFullscreen, viewModel::setAmbientFullscreen)
+             switch(PlayerAppearanceIndex.groupedQuality, groupedQuality, viewModel::setGroupedQualitySelector)
+             switch(PlayerAppearanceIndex.paidPromotion, paidPromotion, viewModel::setPaidPromotionLabel)
+             nav(PlayerAppearanceIndex.gestureOverlay, value = gestureLabel, onClick = { sheet = PreviewSheet.GESTURE })
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceViewModel.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceViewModel.kt
+index 07cd5a0..838b513 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceViewModel.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceViewModel.kt
+@@ -44,6 +44,7 @@ class PlayerAppearanceViewModel
+         val sleepTimerButton = preferences.musicSleepTimerButton.asState(false)
+         val adaptivePlayerSize = preferences.adaptivePlayerSizeEnabled.asState(true)
+         val ambientMode = preferences.videoAmbientModeEnabled.asState(false)
++        val ambientFullscreen = preferences.videoAmbientFullscreenEnabled.asState(false)
+         val groupedQualitySelector = preferences.groupedQualitySelectorEnabled.asState(false)
+         val paidPromotionLabel = preferences.paidPromotionLabel.asState(false)
+         val gestureOverlay = preferences.gestureOverlayStyle.asState(GestureOverlayStyle.CIRCULAR)
+@@ -91,6 +92,7 @@ class PlayerAppearanceViewModel
+         fun setAdaptivePlayerSize(value: Boolean) = write { preferences.setAdaptivePlayerSizeEnabled(value) }
+ 
+         fun setAmbientMode(value: Boolean) = write { preferences.setVideoAmbientModeEnabled(value) }
++        fun setAmbientFullscreen(value: Boolean) = write { preferences.setVideoAmbientFullscreenEnabled(value) }
+ 
+         fun setGroupedQualitySelector(value: Boolean) = write { preferences.setGroupedQualitySelectorEnabled(value) }
+ 
+diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/index/PlayerAppearanceIndex.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/index/PlayerAppearanceIndex.kt
+index 8e609f7..723fed4 100644
+--- a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/index/PlayerAppearanceIndex.kt
++++ b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/index/PlayerAppearanceIndex.kt
+@@ -138,6 +138,13 @@ internal object PlayerAppearanceIndex {
+             R.string.player_settings_ambient_mode_subtitle,
+             R.string.settings_section_video_player,
+         )
++    val ambientFullscreen =
++        entry(
++            "ambient_fullscreen",
++            R.string.player_settings_ambient_fullscreen,
++            R.string.player_settings_ambient_fullscreen_subtitle,
++            R.string.settings_section_video_player,
++        )
+     val groupedQuality =
+         entry(
+             "grouped_quality",
+@@ -209,6 +216,7 @@ internal object PlayerAppearanceIndex {
+             queueSwipeRight,
+             adaptiveSize,
+             ambientMode,
++            ambientFullscreen,
+             groupedQuality,
+             paidPromotion,
+             gestureOverlay,
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index 42815a6..09cf440 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -1403,7 +1403,9 @@
+     <string name="player_settings_normalize_volume">Normalize volume</string>
+     <string name="player_settings_normalize_volume_summary">Turn loud videos down to the same level, like youtube.com</string>
+     <string name="player_settings_display">Display</string>
+-    <string name="player_settings_ambient_mode">Ambient mode</string>
++    <string name="player_settings_ambient_mode">Ambient mode (normal)</string>
++    <string name="player_settings_ambient_fullscreen">Ambient mode (fullscreen)</string>
++    <string name="player_settings_ambient_fullscreen_subtitle">A soft glow of the video\'s colors around it while in fullscreen</string>
+     <string name="player_settings_ambient_mode_subtitle">A soft glow of the video\'s colors around it</string>
+     <string name="player_settings_sponsorblock_video">SponsorBlock for this video</string>
+     <string name="loop_video">Loop video</string>
