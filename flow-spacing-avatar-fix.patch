@@ -221,17 +221,18 @@ index b5fb998..18261e1 100644
          LazyVerticalGrid(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
 new file mode 100644
-index 0000000..cdca2c5
+index 0000000..3998ac4
 --- /dev/null
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
-@@ -0,0 +1,333 @@
+@@ -0,0 +1,352 @@
 +package io.github.aedev.flow.ui.components.musicplayer.controls
 +
 +import androidx.compose.animation.AnimatedContent
 +import androidx.compose.animation.core.Animatable
-+import androidx.compose.animation.core.AnimationVector1D
 +import androidx.compose.animation.core.CubicBezierEasing
-+import androidx.compose.animation.core.Easing
++import androidx.compose.animation.core.FastOutSlowInEasing
++import androidx.compose.animation.core.LinearEasing
++import androidx.compose.animation.core.keyframes
 +import androidx.compose.animation.core.spring
 +import androidx.compose.animation.core.tween
 +import androidx.compose.animation.fadeIn
@@ -243,6 +244,7 @@ index 0000000..cdca2c5
 +import androidx.compose.foundation.combinedClickable
 +import androidx.compose.foundation.gestures.awaitEachGesture
 +import androidx.compose.foundation.gestures.awaitFirstDown
++import androidx.compose.foundation.gestures.detectTapGestures
 +import androidx.compose.foundation.gestures.waitForUpOrCancellation
 +import androidx.compose.foundation.interaction.MutableInteractionSource
 +import androidx.compose.foundation.layout.Arrangement
@@ -259,12 +261,12 @@ index 0000000..cdca2c5
 +import androidx.compose.material.icons.rounded.PlayArrow
 +import androidx.compose.material.icons.rounded.SkipNext
 +import androidx.compose.material.icons.rounded.SkipPrevious
++import androidx.compose.material3.CircularProgressIndicator
 +import androidx.compose.material3.Icon
 +import androidx.compose.material3.MaterialTheme
 +import androidx.compose.runtime.Composable
 +import androidx.compose.runtime.LaunchedEffect
 +import androidx.compose.runtime.getValue
-+import androidx.compose.runtime.mutableIntStateOf
 +import androidx.compose.runtime.mutableStateOf
 +import androidx.compose.runtime.remember
 +import androidx.compose.runtime.rememberCoroutineScope
@@ -289,47 +291,63 @@ index 0000000..cdca2c5
 +import androidx.compose.ui.unit.IntSize
 +import androidx.compose.ui.unit.dp
 +import io.github.aedev.flow.R
-+import kotlinx.coroutines.delay
 +import kotlinx.coroutines.launch
 +import kotlin.math.min
 +
 +/**
-+ * Geometry and timing. Layout values were measured on the reference screenshot (720 px wide,
-+ * i.e. 2 px per dp): side buttons 179 x 138 px, centre pill 272 x 138 px, gap 16 px.
++ * Sizes are measured from the reference screenshot (720 px wide, 2 px per dp). The centre pill
++ * rests at 136 dp. Its motion is a width ratio (1.0 = rest), taken from the 40 frames of the
++ * Mornye recording at 51 fps, one frame ≈ 19.6 ms.
 + */
 +internal object PlaybackSpec {
-+    private const val REST_WIDTH_DP = 136f
-+    // The skip timing is given in px relative to a 270 px rest width; scale it to the measured rest width.
-+    private val SCALE = REST_WIDTH_DP / 270f
-+
 +    val SideWidth: Dp = 89.5f.dp
 +    val SideHeight: Dp = 69f.dp
 +    val SideCorner: Dp = 24.dp
 +    val Gap: Dp = 8.dp
 +    val HeightDp: Dp = 69f.dp
-+    val RestWidth = REST_WIDTH_DP
++    val RestWidth: Dp = 136f.dp
 +
-+    // Track-change stretch (phases 1-4).
-+    val PeakWidth = 300f * SCALE
-+    val UndershootWidth = 266f * SCALE
-+    const val EXPAND_MS = 117
-+    const val HOLD_MS = 117
-+    const val RECOIL_MS = 136
-+    val StiffSnap: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-+    // Not given in the spec for the recoil leg; a standard ease-in-out.
-+    val RecoilEase: Easing = CubicBezierEasing(0.4f, 0f, 0.6f, 1f)
++    // Frames 1–6: press down. Width ratio 1.0 → 0.896 in 98 ms. The right edge stays put.
++    val PressKeyframes = keyframes<Float> {
++        durationMillis = 98
++        0.978f at 20 using LinearEasing
++        0.948f at 39 using LinearEasing
++        0.918f at 59 using LinearEasing
++        0.903f at 78 using LinearEasing
++        0.896f at 98 using LinearEasing
++    }
++
++    // Frames 15–31: release. Stretch to 1.167 by 118 ms, then ease back to rest by 314 ms.
++    val ReleaseKeyframes = keyframes<Float> {
++        durationMillis = 314
++        1.004f at 20 using LinearEasing
++        1.045f at 39 using LinearEasing
++        1.093f at 59 using LinearEasing
++        1.138f at 78 using LinearEasing
++        1.164f at 98 using LinearEasing
++        1.167f at 118 using LinearEasing
++        1.108f at 137 using LinearEasing
++        1.0f at 314 using FastOutSlowInEasing
++    }
++
++    // Frames 31–38: previous/next. Hold, then shrink to 0.892 by 118 ms and hold.
++    val SkipKeyframes = keyframes<Float> {
++        durationMillis = 137
++        1.0f at 39 using LinearEasing
++        0.966f at 59 using LinearEasing
++        0.937f at 78 using LinearEasing
++        0.907f at 98 using LinearEasing
++        0.892f at 118 using LinearEasing
++        0.892f at 137 using LinearEasing
++    }
++
 +    val SettleSpring = spring<Float>(dampingRatio = 0.68f, stiffness = 380f)
 +
-+    // Press response, taken from Mornye's MornyeGlassPress: mass 1, stiffness 420, damping 24.
-+    // damping ratio = 24 / (2 * sqrt(420)) = 0.585. Press goes to 1, release back to 0.
++    // Side buttons keep Mornye's swell and light from mornye_glass_press.dart.
 +    val GlassPressSpring = spring<Float>(dampingRatio = 0.585f, stiffness = 420f)
-+
-+    // Mornye's swell: a fixed number of points, 10% of the shortest side, clamped to 2–5 pt.
 +    const val SWELL_FRACTION = 0.10f
 +    const val SWELL_MIN_DP = 2f
 +    const val SWELL_MAX_DP = 5f
-+
-+    // Mornye's light: white at 20% at the pointer, reach is the longest side clamped to 40–180 pt.
 +    const val LIGHT_ALPHA = 0.20f
 +    const val LIGHT_REACH_MIN_DP = 40f
 +    const val LIGHT_REACH_MAX_DP = 180f
@@ -338,8 +356,10 @@ index 0000000..cdca2c5
 +/**
 + * Previous, Play/Pause and Next.
 + *
-+ * [trackKey] is any value that changes with the track; a change plays the track-change stretch.
-+ * [onPlayPauseChange] receives the new playing state on tap.
++ * - Pressing the centre pill compresses it (frames 1–6). Releasing toggles play/pause and
++ *   stretches it back to rest (frames 15–31).
++ * - Previous and Next shrink the pill (frames 31–38). While [isLoading] is true, the pill shows
++ *   the loading state (frames 7–14 and 39–40) in the surface colour with a spinner.
 + */
 +@Composable
 +fun MusicPlaybackControls(
@@ -348,27 +368,14 @@ index 0000000..cdca2c5
 +    onNext: () -> Unit,
 +    onPlayPauseChange: (Boolean) -> Unit,
 +    modifier: Modifier = Modifier,
-+    trackKey: Any? = null,
++    isLoading: Boolean = false,
 +    onLongPressPrevious: (() -> Unit)? = null,
 +    onLongPressNext: (() -> Unit)? = null,
 +    onLongPressEnd: (() -> Unit)? = null,
 +) {
-+    val width = remember { Animatable(PlaybackSpec.RestWidth) }
++    val scope = rememberCoroutineScope()
++    val pillScale = remember { Animatable(1f) }
 +    var playing by remember(isPlaying) { mutableStateOf(isPlaying) }
-+    var skipCount by remember { mutableIntStateOf(0) }
-+
-+    // Track-change stretch. The first composition is not a change, so it is skipped.
-+    var lastTrackKey by remember { mutableStateOf(trackKey) }
-+    LaunchedEffect(trackKey) {
-+        if (trackKey != lastTrackKey) {
-+            lastTrackKey = trackKey
-+            skipCount++
-+        }
-+    }
-+
-+    LaunchedEffect(skipCount) {
-+        if (skipCount > 0) width.playSkipStretch()
-+    }
 +
 +    Row(
 +        modifier = modifier.fillMaxWidth(),
@@ -379,46 +386,73 @@ index 0000000..cdca2c5
 +            icon = Icons.Rounded.SkipPrevious,
 +            description = stringResource(R.string.previous),
 +            onClick = {
-+                skipCount++
++                scope.launch {
++                    pillScale.animateTo(0.892f, PlaybackSpec.SkipKeyframes)
++                    pillScale.animateTo(1f, PlaybackSpec.SettleSpring)
++                }
 +                onPrevious()
 +            },
 +            onLongClick = onLongPressPrevious,
 +            onRelease = onLongPressEnd,
 +        )
 +
-+        val containerColor =
-+            if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
-+        val contentColor =
-+            if (playing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
++        val pillColor = when {
++            isLoading -> MaterialTheme.colorScheme.surfaceContainerHigh
++            playing -> MaterialTheme.colorScheme.primary
++            else -> MaterialTheme.colorScheme.secondaryContainer
++        }
++        val contentColor = when {
++            isLoading -> MaterialTheme.colorScheme.onSurfaceVariant
++            playing -> MaterialTheme.colorScheme.onPrimary
++            else -> MaterialTheme.colorScheme.onSecondaryContainer
++        }
 +
-+        GlassPressBox(
++        Box(
 +            modifier = Modifier
-+                .width(width.value.dp)
-+                .height(PlaybackSpec.HeightDp),
-+            shape = RoundedCornerShape(percent = 50),
-+            cornerRadius = PlaybackSpec.HeightDp / 2,
-+            containerColor = containerColor,
-+            onClick = {
-+                playing = !playing
-+                onPlayPauseChange(playing)
-+            },
-+            onLongClick = null,
-+            onRelease = null,
-+        ) {
-+            AnimatedContent(
-+                targetState = playing,
-+                transitionSpec = {
-+                    (fadeIn(tween(120)) + scaleIn(initialScale = 0.7f)) togetherWith
-+                        (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f))
++                .width(PlaybackSpec.RestWidth * pillScale.value)
++                .height(PlaybackSpec.HeightDp)
++                .clip(RoundedCornerShape(percent = 50))
++                .background(pillColor)
++                .pointerInput(Unit) {
++                    detectTapGestures(
++                        onPress = {
++                            scope.launch { pillScale.animateTo(0.896f, PlaybackSpec.PressKeyframes) }
++                            val released = tryAwaitRelease()
++                            scope.launch {
++                                pillScale.snapTo(1.0f)
++                                pillScale.animateTo(1.0f, PlaybackSpec.ReleaseKeyframes)
++                            }
++                            if (released) {
++                                playing = !playing
++                                onPlayPauseChange(playing)
++                            }
++                        },
++                    )
 +                },
-+                label = "playPauseMorph",
-+            ) { isPlayingNow ->
-+                Icon(
-+                    imageVector = if (isPlayingNow) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-+                    contentDescription = null,
-+                    tint = contentColor,
-+                    modifier = Modifier.size(PlaybackSpec.HeightDp * 0.5f),
++            contentAlignment = Alignment.Center,
++        ) {
++            if (isLoading) {
++                CircularProgressIndicator(
++                    modifier = Modifier.size(PlaybackSpec.HeightDp * 0.4f),
++                    color = contentColor,
++                    strokeWidth = 3.dp,
 +                )
++            } else {
++                AnimatedContent(
++                    targetState = playing,
++                    transitionSpec = {
++                        (fadeIn(tween(120)) + scaleIn(initialScale = 0.7f)) togetherWith
++                            (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f))
++                    },
++                    label = "playPauseMorph",
++                ) { isPlayingNow ->
++                    Icon(
++                        imageVector = if (isPlayingNow) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
++                        contentDescription = null,
++                        tint = contentColor,
++                        modifier = Modifier.size(PlaybackSpec.HeightDp * 0.5f),
++                    )
++                }
 +            }
 +        }
 +
@@ -426,27 +460,16 @@ index 0000000..cdca2c5
 +            icon = Icons.Rounded.SkipNext,
 +            description = stringResource(R.string.next),
 +            onClick = {
-+                skipCount++
++                scope.launch {
++                    pillScale.animateTo(0.892f, PlaybackSpec.SkipKeyframes)
++                    pillScale.animateTo(1f, PlaybackSpec.SettleSpring)
++                }
 +                onNext()
 +            },
 +            onLongClick = onLongPressNext,
 +            onRelease = onLongPressEnd,
 +        )
 +    }
-+}
-+
-+/** Phases 1-4 of the track-change stretch, using the timings from the recording. */
-+private suspend fun Animatable<Float, AnimationVector1D>.playSkipStretch() {
-+    animateTo(
-+        PlaybackSpec.PeakWidth,
-+        tween(PlaybackSpec.EXPAND_MS, easing = PlaybackSpec.StiffSnap),
-+    )
-+    delay(PlaybackSpec.HOLD_MS.toLong())
-+    animateTo(
-+        PlaybackSpec.UndershootWidth,
-+        tween(PlaybackSpec.RECOIL_MS, easing = PlaybackSpec.RecoilEase),
-+    )
-+    animateTo(PlaybackSpec.RestWidth, PlaybackSpec.SettleSpring)
 +}
 +
 +@Composable
@@ -475,11 +498,7 @@ index 0000000..cdca2c5
 +    }
 +}
 +
-+/**
-+ * A control that responds like Mornye's glass press. The layout and hit target never move: the
-+ * swell and light are painted on a graphics layer, and the press is tracked without consuming the
-+ * pointer, so taps and long presses behave as before.
-+ */
++/** Mornye's glass press (swell and light) for the side buttons. Layout and hit target stay fixed. */
 +@Composable
 +private fun GlassPressBox(
 +    modifier: Modifier,
