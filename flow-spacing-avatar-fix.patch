@@ -221,18 +221,14 @@ index b5fb998..18261e1 100644
          LazyVerticalGrid(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
 new file mode 100644
-index 0000000..3998ac4
+index 0000000..6866a9b
 --- /dev/null
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/controls/MusicPlaybackControls.kt
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,314 @@
 +package io.github.aedev.flow.ui.components.musicplayer.controls
 +
 +import androidx.compose.animation.AnimatedContent
 +import androidx.compose.animation.core.Animatable
-+import androidx.compose.animation.core.CubicBezierEasing
-+import androidx.compose.animation.core.FastOutSlowInEasing
-+import androidx.compose.animation.core.LinearEasing
-+import androidx.compose.animation.core.keyframes
 +import androidx.compose.animation.core.spring
 +import androidx.compose.animation.core.tween
 +import androidx.compose.animation.fadeIn
@@ -307,44 +303,11 @@ index 0000000..3998ac4
 +    val HeightDp: Dp = 69f.dp
 +    val RestWidth: Dp = 136f.dp
 +
-+    // Frames 1–6: press down. Width ratio 1.0 → 0.896 in 98 ms. The right edge stays put.
-+    val PressKeyframes = keyframes<Float> {
-+        durationMillis = 98
-+        0.978f at 20 using LinearEasing
-+        0.948f at 39 using LinearEasing
-+        0.918f at 59 using LinearEasing
-+        0.903f at 78 using LinearEasing
-+        0.896f at 98 using LinearEasing
-+    }
++    // Material 3 Expressive, M3EMotion.expressiveSpatialPress: stiffness 380, damping ratio 0.55.
++    // Used for every press, release and settle.
++    val PressSpring = spring<Float>(dampingRatio = 0.55f, stiffness = 380f)
 +
-+    // Frames 15–31: release. Stretch to 1.167 by 118 ms, then ease back to rest by 314 ms.
-+    val ReleaseKeyframes = keyframes<Float> {
-+        durationMillis = 314
-+        1.004f at 20 using LinearEasing
-+        1.045f at 39 using LinearEasing
-+        1.093f at 59 using LinearEasing
-+        1.138f at 78 using LinearEasing
-+        1.164f at 98 using LinearEasing
-+        1.167f at 118 using LinearEasing
-+        1.108f at 137 using LinearEasing
-+        1.0f at 314 using FastOutSlowInEasing
-+    }
 +
-+    // Frames 31–38: previous/next. Hold, then shrink to 0.892 by 118 ms and hold.
-+    val SkipKeyframes = keyframes<Float> {
-+        durationMillis = 137
-+        1.0f at 39 using LinearEasing
-+        0.966f at 59 using LinearEasing
-+        0.937f at 78 using LinearEasing
-+        0.907f at 98 using LinearEasing
-+        0.892f at 118 using LinearEasing
-+        0.892f at 137 using LinearEasing
-+    }
-+
-+    val SettleSpring = spring<Float>(dampingRatio = 0.68f, stiffness = 380f)
-+
-+    // Side buttons keep Mornye's swell and light from mornye_glass_press.dart.
-+    val GlassPressSpring = spring<Float>(dampingRatio = 0.585f, stiffness = 420f)
 +    const val SWELL_FRACTION = 0.10f
 +    const val SWELL_MIN_DP = 2f
 +    const val SWELL_MAX_DP = 5f
@@ -387,8 +350,8 @@ index 0000000..3998ac4
 +            description = stringResource(R.string.previous),
 +            onClick = {
 +                scope.launch {
-+                    pillScale.animateTo(0.892f, PlaybackSpec.SkipKeyframes)
-+                    pillScale.animateTo(1f, PlaybackSpec.SettleSpring)
++                    pillScale.animateTo(0.892f, PlaybackSpec.PressSpring)
++                    pillScale.animateTo(1f, PlaybackSpec.PressSpring)
 +                }
 +                onPrevious()
 +            },
@@ -416,11 +379,10 @@ index 0000000..3998ac4
 +                .pointerInput(Unit) {
 +                    detectTapGestures(
 +                        onPress = {
-+                            scope.launch { pillScale.animateTo(0.896f, PlaybackSpec.PressKeyframes) }
++                            scope.launch { pillScale.animateTo(0.896f, PlaybackSpec.PressSpring) }
 +                            val released = tryAwaitRelease()
 +                            scope.launch {
-+                                pillScale.snapTo(1.0f)
-+                                pillScale.animateTo(1.0f, PlaybackSpec.ReleaseKeyframes)
++                                pillScale.animateTo(1.0f, PlaybackSpec.PressSpring)
 +                            }
 +                            if (released) {
 +                                playing = !playing
@@ -461,8 +423,8 @@ index 0000000..3998ac4
 +            description = stringResource(R.string.next),
 +            onClick = {
 +                scope.launch {
-+                    pillScale.animateTo(0.892f, PlaybackSpec.SkipKeyframes)
-+                    pillScale.animateTo(1f, PlaybackSpec.SettleSpring)
++                    pillScale.animateTo(0.892f, PlaybackSpec.PressSpring)
++                    pillScale.animateTo(1f, PlaybackSpec.PressSpring)
 +                }
 +                onNext()
 +            },
@@ -539,9 +501,9 @@ index 0000000..3998ac4
 +                awaitEachGesture {
 +                    val down = awaitFirstDown(requireUnconsumed = false)
 +                    pointer.value = down.position
-+                    scope.launch { press.animateTo(1f, PlaybackSpec.GlassPressSpring) }
++                    scope.launch { press.animateTo(1f, PlaybackSpec.PressSpring) }
 +                    waitForUpOrCancellation()
-+                    scope.launch { press.animateTo(0f, PlaybackSpec.GlassPressSpring) }
++                    scope.launch { press.animateTo(0f, PlaybackSpec.PressSpring) }
 +                    releaseCallback?.invoke()
 +                }
 +            }
