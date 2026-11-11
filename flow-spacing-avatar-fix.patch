@@ -1088,10 +1088,18 @@ index 876f6e3..3ffe77e 100644
              if (expandedSurfacesMounted && !localIsInPipMode) {
                  Media3SubtitleOverlay(
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
-index 0e1e1e7..f8177f9 100644
+index 0e1e1e7..b37bcf4 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/screens/player/state/VideoPlayerPreferencesState.kt
-@@ -86,6 +86,7 @@ internal fun rememberVideoPlayerPreferences(context: Context): VideoPlayerPrefer
+@@ -47,6 +47,7 @@ internal class VideoPlayerPreferencesState(
+     val savedSubtitleStyle: SubtitleStyle,
+     val rememberPlaybackSpeed: Boolean,
+     val ambientModeEnabled: Boolean,
++    val ambientFullscreenEnabled: Boolean = false,
+     val adaptivePlayerSizeEnabled: Boolean,
+     val groupedQualitySelectorEnabled: Boolean,
+     val lockModeEnabled: Boolean,
+@@ -86,6 +87,7 @@ internal fun rememberVideoPlayerPreferences(context: Context): VideoPlayerPrefer
      val savedSubtitleStyle by playerPreferences.subtitleStyle.collectAsState(initial = SubtitleStyle())
      val rememberPlaybackSpeed by playerPreferences.rememberPlaybackSpeed.collectAsState(initial = false)
      val ambientModeEnabled by playerPreferences.videoAmbientModeEnabled.collectAsState(initial = false)
@@ -1099,6 +1107,14 @@ index 0e1e1e7..f8177f9 100644
      val adaptivePlayerSizeEnabled by playerPreferences.adaptivePlayerSizeEnabled.collectAsState(initial = true)
      val groupedQualitySelectorEnabled by playerPreferences.groupedQualitySelectorEnabled.collectAsState(initial = false)
      val lockModeEnabled by playerPreferences.overlayLockModeEnabled.collectAsState(initial = false)
+@@ -123,6 +125,7 @@ internal fun rememberVideoPlayerPreferences(context: Context): VideoPlayerPrefer
+         savedSubtitleStyle = savedSubtitleStyle,
+         rememberPlaybackSpeed = rememberPlaybackSpeed,
+         ambientModeEnabled = ambientModeEnabled,
++        ambientFullscreenEnabled = ambientFullscreenEnabled,
+         adaptivePlayerSizeEnabled = adaptivePlayerSizeEnabled,
+         groupedQualitySelectorEnabled = groupedQualitySelectorEnabled,
+         lockModeEnabled = lockModeEnabled,
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt b/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt
 index 67e358a..162245f 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/screens/settings/appearance/player/PlayerAppearanceScreen.kt
