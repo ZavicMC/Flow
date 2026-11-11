@@ -578,7 +578,7 @@ index 0000000..3998ac4
 +    )
 +}
 diff --git a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
-index 332e561..c5de283 100644
+index 332e561..7b41ede 100644
 --- a/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
 +++ b/app/src/main/java/io/github/aedev/flow/ui/components/musicplayer/full/FullMusicPlayerContent.kt
 @@ -51,7 +51,7 @@ import io.github.aedev.flow.ui.components.musicplayer.queue.QueueSheet
@@ -590,7 +590,7 @@ index 332e561..c5de283 100644
  import io.github.aedev.flow.ui.components.shared.MediaSleepTimerSheet
  import io.github.aedev.flow.ui.components.shared.SkipDirection
  import io.github.aedev.flow.ui.components.shared.quickactions.QuickActionUndo
-@@ -312,14 +312,16 @@ internal fun FullMusicPlayerContent(
+@@ -312,14 +312,15 @@ internal fun FullMusicPlayerContent(
                  },
                  controls = { modifier ->
                      MaterialTheme(colorScheme = controlScheme) {
@@ -606,7 +606,6 @@ index 332e561..c5de283 100644
 +                            onPlayPauseChange = { viewModel.togglePlayPause() },
                              modifier = modifier,
 -                            onPreviewDirectionChange = { previewDirection = it },
-+                            trackKey = uiState.currentQueueIndex,
 +                            onLongPressPrevious = { previewDirection = SkipDirection.PREVIOUS },
 +                            onLongPressNext = { previewDirection = SkipDirection.NEXT },
 +                            onLongPressEnd = { previewDirection = null },
